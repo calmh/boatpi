@@ -94,5 +94,8 @@ func (s *HTS221) Data() (humidity, temperature float64, err error) {
 	humidity = (float64(r.signed(hts221HumOutHReg, hts221HumOutLReg))-s.h0t0Out)*s.hSlope + s.h0rH
 	temperature = (float64(r.signed(hts221TempOutHReg, hts221TempOutLReg))-s.t0Out)*s.tSlope + s.t0degC
 
-	return humidity, temperature, fmt.Errorf("read data: %w", r.error)
+	if r.error != nil {
+		return 0, 0, fmt.Errorf("read data: %w", r.error)
+	}
+	return humidity, temperature, nil
 }

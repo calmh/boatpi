@@ -45,5 +45,8 @@ func (s *LPS25H) Data() (pressure, temperature float64, err error) {
 	pressure = float64(r.signed(lps25hPressOutHReg, lps25hPressOutLReg, lps25HressOutXLReg)) / 4096
 	temperature = float64(r.signed(lps25hTempOutHReg, lps25hTempOutLReg))/480 + 42.5
 
-	return pressure, temperature, fmt.Errorf("read data: %w", r.error)
+	if r.error != nil {
+		return 0, 0, fmt.Errorf("read data: %w", r.error)
+	}
+	return pressure, temperature, nil
 }
