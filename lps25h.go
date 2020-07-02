@@ -2,12 +2,18 @@ package sensehat
 
 import (
 	"fmt"
+	"sync"
+	"time"
 )
 
 // ST LPS25H Pressure & Temperature Sensor
 
 type LPS25H struct {
-	device Device
+	device      Device
+	mut         sync.Mutex
+	cached      time.Time
+	temperature float64
+	pressure    float64
 }
 
 const (
@@ -34,19 +40,39 @@ func NewLPS25H(dev Device) (*LPS25H, error) {
 	return &LPS25H{device: dev}, nil
 }
 
-func (s *LPS25H) Data() (pressure, temperature float64, err error) {
+func (s *LPS25H) Refresh(age time.Duration) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if time.Since(s.cached) < age {
+		return nil
+	}
+
 	if err := s.device.SetAddress(lps25hAddress); err != nil {
-		return 0, 0, fmt.Errorf("set device address: %w", err)
+		return fmt.Errorf("set device address: %w", err)
 	}
 
 	r := newDevReader(s.device)
 
 	// Numeric constants from data sheet
-	pressure = float64(r.signed(lps25hPressOutHReg, lps25hPressOutLReg, lps25HressOutXLReg)) / 4096
-	temperature = float64(r.signed(lps25hTempOutHReg, lps25hTempOutLReg))/480 + 42.5
+	s.pressure = float64(r.signed(lps25hPressOutHReg, lps25hPressOutLReg, lps25HressOutXLReg)) / 4096
+	s.temperature = float64(r.signed(lps25hTempOutHReg, lps25hTempOutLReg))/480 + 42.5
 
 	if r.error != nil {
-		return 0, 0, fmt.Errorf("read data: %w", r.error)
+		return fmt.Errorf("read data: %w", r.error)
 	}
-	return pressure, temperature, nil
+	s.cached = time.Now()
+	return nil
+}
+
+func (s *LPS25H) Temperature() float64 {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.temperature
+}
+
+func (s *LPS25H) Pressure() float64 {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.pressure
 }

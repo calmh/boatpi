@@ -2,6 +2,8 @@ package sensehat
 
 import (
 	"fmt"
+	"sync"
+	"time"
 )
 
 // ST HTS221 Humidity & Temperature Sensor
@@ -18,6 +20,11 @@ type HTS221 struct {
 	tSlope  float64
 	hSlope  float64
 	device  Device
+
+	mut         sync.Mutex
+	cached      time.Time
+	temperature float64
+	humidity    float64
 }
 
 const (
@@ -84,18 +91,39 @@ func NewHTS221(dev Device) (*HTS221, error) {
 	return s, nil
 }
 
-func (s *HTS221) Data() (humidity, temperature float64, err error) {
+func (s *HTS221) Refresh(age time.Duration) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	if time.Since(s.cached) < age {
+		return nil
+	}
+
 	if err := s.device.SetAddress(hts221Address); err != nil {
-		return 0, 0, fmt.Errorf("set device address: %w", err)
+		return fmt.Errorf("set device address: %w", err)
 	}
 
 	r := newDevReader(s.device)
 
-	humidity = (float64(r.signed(hts221HumOutHReg, hts221HumOutLReg))-s.h0t0Out)*s.hSlope + s.h0rH
-	temperature = (float64(r.signed(hts221TempOutHReg, hts221TempOutLReg))-s.t0Out)*s.tSlope + s.t0degC
+	s.humidity = (float64(r.signed(hts221HumOutHReg, hts221HumOutLReg))-s.h0t0Out)*s.hSlope + s.h0rH
+	s.temperature = (float64(r.signed(hts221TempOutHReg, hts221TempOutLReg))-s.t0Out)*s.tSlope + s.t0degC
 
 	if r.error != nil {
-		return 0, 0, fmt.Errorf("read data: %w", r.error)
+		return fmt.Errorf("read data: %w", r.error)
 	}
-	return humidity, temperature, nil
+
+	s.cached = time.Now()
+	return nil
+}
+
+func (s *HTS221) Temperature() float64 {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.temperature
+}
+
+func (s *HTS221) Humidity() float64 {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.humidity
 }
