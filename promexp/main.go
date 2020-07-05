@@ -17,6 +17,9 @@ import (
 func main() {
 	device := flag.String("device", "/dev/i2c-1", "I2C device")
 	promaddr := flag.String("prometheus", "", "Prometheus exporter address")
+	po := flag.Float64("po", 0, "Pitch offset (degrees)")
+	ro := flag.Float64("ro", 0, "Roll offset (degrees)")
+	wo := flag.Float64("wo", 0, "Yaw offset (degrees)")
 	flag.Parse()
 
 	dev, err := sysfs.NewI2cDevice(*device)
@@ -38,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("init LSM9DS1:", err)
 	}
-	alsm9ds1 := sensehat.NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1)
+	alsm9ds1 := sensehat.NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *po, *ro, *wo)
 
 	if *promaddr != "" {
 		servePrometheus(*promaddr, hts221, lps25h, alsm9ds1)
@@ -85,31 +88,31 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "average_deg",
+		Name:        "median_deg",
 		ConstLabels: prometheus.Labels{"direction": "pitch"},
 	}, func() float64 {
 		p, _, _ := lsm9ds1.Angles()
-		return p
+		return round(p, 2)
 	})
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "average_deg",
+		Name:        "median_deg",
 		ConstLabels: prometheus.Labels{"direction": "roll"},
 	}, func() float64 {
 		_, r, _ := lsm9ds1.Angles()
-		return r
+		return round(r, 2)
 	})
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "average_deg",
+		Name:        "median_deg",
 		ConstLabels: prometheus.Labels{"direction": "yaw"},
 	}, func() float64 {
 		_, _, w := lsm9ds1.Angles()
-		return w
+		return round(w, 2)
 	})
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
@@ -119,7 +122,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		ConstLabels: prometheus.Labels{"direction": "pitch"},
 	}, func() float64 {
 		p, _, _ := lsm9ds1.Deviation()
-		return p
+		return round(p, 2)
 	})
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
@@ -129,7 +132,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		ConstLabels: prometheus.Labels{"direction": "roll"},
 	}, func() float64 {
 		_, r, _ := lsm9ds1.Deviation()
-		return r
+		return round(r, 2)
 	})
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
@@ -139,7 +142,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		ConstLabels: prometheus.Labels{"direction": "yaw"},
 	}, func() float64 {
 		_, _, w := lsm9ds1.Deviation()
-		return w
+		return round(w, 2)
 	})
 
 	http.Handle("/metrics", promhttp.Handler())

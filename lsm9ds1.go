@@ -78,27 +78,23 @@ func (s *LSM9DS1) Angles() (roll, pitch, yaw float64) {
 
 type AvgLSM9DS1 struct {
 	lsm9ds1    *LSM9DS1
-	size       int
 	intv       time.Duration
 	mut        sync.Mutex
-	x, y, z    []float64
-	p, r, w    []float64
-	xs, ys, zs float64
-	ps, rs, ws float64
+	accel      [][3]float64
+	angles     [][3]float64
+	po, ro, wo float64
 }
 
-func NewAvgLSM9DS1(total, intv time.Duration, lsm9ds1 *LSM9DS1) *AvgLSM9DS1 {
+func NewAvgLSM9DS1(total, intv time.Duration, lsm9ds1 *LSM9DS1, po, ro, wo float64) *AvgLSM9DS1 {
 	size := int(total / intv)
 	a := &AvgLSM9DS1{
 		lsm9ds1: lsm9ds1,
-		size:    size,
 		intv:    intv,
-		x:       make([]float64, size),
-		y:       make([]float64, size),
-		z:       make([]float64, size),
-		p:       make([]float64, size),
-		r:       make([]float64, size),
-		w:       make([]float64, size),
+		accel:   make([][3]float64, 0, size),
+		angles:  make([][3]float64, 0, size),
+		po:      po,
+		ro:      ro,
+		wo:      wo,
 	}
 	go a.serve()
 	return a
@@ -117,73 +113,70 @@ func (a *AvgLSM9DS1) update() {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 	x, y, z := a.lsm9ds1.Acceleration()
-	a.xs -= a.x[a.size-1]
-	a.ys -= a.y[a.size-1]
-	a.zs -= a.z[a.size-1]
-	a.ps -= a.p[a.size-1]
-	a.rs -= a.r[a.size-1]
-	a.ws -= a.w[a.size-1]
-	copy(a.x[1:], a.x)
-	copy(a.y[1:], a.y)
-	copy(a.z[1:], a.z)
-	copy(a.p[1:], a.p)
-	copy(a.r[1:], a.r)
-	copy(a.w[1:], a.w)
-	a.x[0] = x
-	a.y[0] = y
-	a.z[0] = z
-	a.p[0] = math.Atan(y/z) / math.Pi * 180
-	a.r[0] = math.Atan(x/z) / math.Pi * 180
-	a.w[0] = math.Atan(x/y) / math.Pi * 180
-	a.xs += a.x[0]
-	a.ys += a.y[0]
-	a.zs += a.z[0]
-	a.ps += a.p[0]
-	a.rs += a.r[0]
-	a.ws += a.w[0]
+	p := math.Atan(z/y)/math.Pi*180 + a.po
+	r := math.Atan(z/x)/math.Pi*180 + a.ro
+	w := math.Atan(y/x)/math.Pi*180 + a.wo
+	if len(a.accel) < cap(a.accel) {
+		a.accel = append(a.accel, [3]float64{x, y, z})
+		a.angles = append(a.angles, [3]float64{p, r, w})
+	} else {
+		copy(a.accel, a.accel[1:])
+		copy(a.angles, a.angles[1:])
+		a.accel[len(a.accel)-1] = [3]float64{x, y, z}
+		a.angles[len(a.angles)-1] = [3]float64{p, r, w}
+	}
 }
 
 func (a *AvgLSM9DS1) Acceleration() (x, y, z float64) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
-	n := float64(a.size)
-	return a.xs / n, a.ys / n, a.zs / n
+	if len(a.accel) == 0 {
+		return 0, 0, 0
+	}
+	i := len(a.accel) / 2
+	return a.accel[i][0], a.accel[i][1], a.accel[i][2]
 }
 
 func (a *AvgLSM9DS1) Angles() (p, r, w float64) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
-	n := float64(a.size)
-	return a.ps / n, a.rs / n, a.ws / n
+	if len(a.angles) == 0 {
+		return 0, 0, 0
+	}
+	i := len(a.angles) / 2
+	return a.angles[i][0], a.angles[i][1], a.angles[i][2]
 }
 
 func (a *AvgLSM9DS1) Deviation() (p, r, w float64) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
-	minp := a.p[0]
-	maxp := a.p[0]
-	minr := a.r[0]
-	maxr := a.r[0]
-	minw := a.w[0]
-	maxw := a.w[0]
-	for i := 1; i < a.size; i++ {
-		if a.p[i] < minp {
-			minp = a.p[i]
+	if len(a.angles) == 0 {
+		return 0, 0, 0
+	}
+	minp := a.angles[0][0]
+	maxp := a.angles[0][0]
+	minr := a.angles[0][1]
+	maxr := a.angles[0][1]
+	minw := a.angles[0][2]
+	maxw := a.angles[0][2]
+	for i := 1; i < len(a.angles); i++ {
+		if a.angles[i][0] < minp {
+			minp = a.angles[i][0]
 		}
-		if a.p[i] > maxp {
-			maxp = a.p[i]
+		if a.angles[i][0] > maxp {
+			maxp = a.angles[i][0]
 		}
-		if a.r[i] < minr {
-			minr = a.r[i]
+		if a.angles[i][1] < minr {
+			minr = a.angles[i][1]
 		}
-		if a.r[i] > maxr {
-			maxr = a.r[i]
+		if a.angles[i][1] > maxr {
+			maxr = a.angles[i][1]
 		}
-		if a.w[i] < minw {
-			minw = a.w[i]
+		if a.angles[i][2] < minw {
+			minw = a.angles[i][2]
 		}
-		if a.w[i] > maxw {
-			maxw = a.w[i]
+		if a.angles[i][2] > maxw {
+			maxw = a.angles[i][2]
 		}
 	}
 	return maxp - minp, maxr - minr, maxw - minw
