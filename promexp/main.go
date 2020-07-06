@@ -91,7 +91,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		Name:        "median_deg",
 		ConstLabels: prometheus.Labels{"direction": "pitch"},
 	}, func() float64 {
-		p, _, _ := lsm9ds1.Angles()
+		p, _, _ := lsm9ds1.AccelAngles()
 		return round(p, 2)
 	})
 
@@ -101,7 +101,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		Name:        "median_deg",
 		ConstLabels: prometheus.Labels{"direction": "roll"},
 	}, func() float64 {
-		_, r, _ := lsm9ds1.Angles()
+		_, r, _ := lsm9ds1.AccelAngles()
 		return round(r, 2)
 	})
 
@@ -111,7 +111,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		Name:        "median_deg",
 		ConstLabels: prometheus.Labels{"direction": "yaw"},
 	}, func() float64 {
-		_, _, w := lsm9ds1.Angles()
+		_, _, w := lsm9ds1.AccelAngles()
 		return round(w, 2)
 	})
 
@@ -143,6 +143,36 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	}, func() float64 {
 		_, _, w := lsm9ds1.Deviation()
 		return round(w, 2)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "compass_deg",
+		ConstLabels: prometheus.Labels{"plane": "xy"},
+	}, func() float64 {
+		xy, _, _ := lsm9ds1.MagneticAngles()
+		return round(xy, 2)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "compass_deg",
+		ConstLabels: prometheus.Labels{"plane": "yz"},
+	}, func() float64 {
+		_, yz, _ := lsm9ds1.MagneticAngles()
+		return round(yz, 2)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "compass_deg",
+		ConstLabels: prometheus.Labels{"plane": "xz"},
+	}, func() float64 {
+		_, _, xz := lsm9ds1.MagneticAngles()
+		return round(xz, 2)
 	})
 
 	http.Handle("/metrics", promhttp.Handler())
