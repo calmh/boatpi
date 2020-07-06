@@ -88,7 +88,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "median_deg",
+		Name:        "accel_median_deg",
 		ConstLabels: prometheus.Labels{"plane": "a"},
 	}, func() float64 {
 		a, _, _ := lsm9ds1.AccelAngles()
@@ -98,7 +98,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "median_deg",
+		Name:        "accel_median_deg",
 		ConstLabels: prometheus.Labels{"plane": "b"},
 	}, func() float64 {
 		_, b, _ := lsm9ds1.AccelAngles()
@@ -108,7 +108,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "median_deg",
+		Name:        "accel_median_deg",
 		ConstLabels: prometheus.Labels{"plane": "c"},
 	}, func() float64 {
 		_, _, c := lsm9ds1.AccelAngles()
@@ -118,7 +118,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "deviation_deg",
+		Name:        "accel_deviation_deg",
 		ConstLabels: prometheus.Labels{"plane": "a"},
 	}, func() float64 {
 		a, _, _ := lsm9ds1.Deviation()
@@ -128,7 +128,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "deviation_deg",
+		Name:        "accel_deviation_deg",
 		ConstLabels: prometheus.Labels{"plane": "b"},
 	}, func() float64 {
 		_, b, _ := lsm9ds1.Deviation()
@@ -138,7 +138,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "deviation_deg",
+		Name:        "accel_deviation_deg",
 		ConstLabels: prometheus.Labels{"plane": "c"},
 	}, func() float64 {
 		_, _, c := lsm9ds1.Deviation()
