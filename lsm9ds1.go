@@ -109,19 +109,19 @@ func (s *LSM9DS1) MagneticField() (x, y, z int16) {
 	return s.mx, s.my, s.mz
 }
 
-func (s *LSM9DS1) AccelAngles() (roll, pitch, yaw float64) {
+func (s *LSM9DS1) AccelAngles() (a, b, c float64) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return math.Atan(float64(s.ax)/float64(s.az)) / math.Pi * 180, math.Atan(float64(s.ay)/float64(s.az)) / math.Pi * 180, math.Atan(float64(s.ax)/float64(s.ay)) / math.Pi * 180
+	return math.Atan2(float64(s.ay), float64(s.az)) / math.Pi * 180, math.Atan2(float64(s.ay), float64(s.az)) / math.Pi * 180, math.Atan2(float64(s.ax), float64(s.az)) / math.Pi * 180
 }
 
-func (s *LSM9DS1) MagneticAngles() (xy, yz, xz float64) {
+func (s *LSM9DS1) MagneticAngles() (a, b, c float64) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	x := float64(s.mx - (s.cal.MaxX+s.cal.MinX)/2)
 	y := float64(s.my - (s.cal.MaxY+s.cal.MinY)/2)
 	z := float64(s.mz - (s.cal.MaxZ+s.cal.MinZ)/2)
-	return compass(math.Atan(y/x) / math.Pi * 180), compass(math.Atan(y/z) / math.Pi * 180), compass(math.Atan(x/z) / math.Pi * 180)
+	return compass(math.Atan2(y, x) / math.Pi * 180), compass(math.Atan2(y, z) / math.Pi * 180), compass(math.Atan2(x, z) / math.Pi * 180)
 }
 
 func compass(v float64) float64 {
