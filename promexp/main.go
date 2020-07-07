@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/binary"
 	"flag"
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/kastelo-labs/sensehat"
@@ -16,10 +18,12 @@ import (
 
 func main() {
 	device := flag.String("device", "/dev/i2c-1", "I2C device")
-	promaddr := flag.String("prometheus", "", "Prometheus exporter address")
-	po := flag.Float64("po", 0, "Pitch offset (degrees)")
-	ro := flag.Float64("ro", 0, "Roll offset (degrees)")
-	wo := flag.Float64("wo", 0, "Yaw offset (degrees)")
+	promaddr := flag.String("prometheus", ":9120", "Prometheus exporter address")
+	ao := flag.Float64("ao", 0, "Accel A offset (degrees)")
+	bo := flag.Float64("bo", 0, "Accel B offset (degrees)")
+	co := flag.Float64("co", 0, "Accel C offset (degrees)")
+	mo := flag.Float64("mo", 0, "Magnetic compass offset (degrees)")
+	calfile := flag.String("calibration-file", "calibration.lsm9ds1", "Calibration file")
 	flag.Parse()
 
 	dev, err := sysfs.NewI2cDevice(*device)
@@ -37,15 +41,24 @@ func main() {
 		log.Fatalln("init HTS221:", err)
 	}
 
-	lsm9ds1, err := sensehat.NewLSM9DS1(dev)
+	cal := loadCalibration(*calfile)
+	lsm9ds1, err := sensehat.NewLSM9DS1(dev, *mo, cal)
 	if err != nil {
 		log.Fatalln("init LSM9DS1:", err)
 	}
-	alsm9ds1 := sensehat.NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *po, *ro, *wo)
+	alsm9ds1 := sensehat.NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *ao, *bo, *co)
 
-	if *promaddr != "" {
-		servePrometheus(*promaddr, hts221, lps25h, alsm9ds1)
-	}
+	go func() {
+		for range time.NewTicker(time.Hour).C {
+			cur := lsm9ds1.Calibration()
+			if cur != cal {
+				saveCalibration(*calfile, cur)
+				cal = cur
+			}
+		}
+	}()
+
+	servePrometheus(*promaddr, hts221, lps25h, alsm9ds1)
 }
 
 func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS25H, lsm9ds1 *sensehat.AvgLSM9DS1) {
@@ -182,4 +195,31 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 func round(x float64, prec int) float64 {
 	pow := math.Pow10(prec)
 	return math.Round(x*pow) / pow
+}
+
+func saveCalibration(file string, cal sensehat.Calibration) error {
+	fd, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	if err := binary.Write(fd, binary.BigEndian, &cal); err != nil {
+		fd.Close()
+		return err
+	}
+	return fd.Close()
+}
+
+func loadCalibration(file string) sensehat.Calibration {
+	fd, err := os.Open(file)
+	if err != nil {
+		return sensehat.Calibration{}
+	}
+	defer fd.Close()
+
+	var cal sensehat.Calibration
+	if err := binary.Read(fd, binary.BigEndian, &cal); err != nil {
+		return sensehat.Calibration{}
+	}
+
+	return cal
 }

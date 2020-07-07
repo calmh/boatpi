@@ -1,11 +1,8 @@
 package sensehat
 
 import (
-	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
-	"os"
 	"sync"
 	"time"
 )
@@ -16,13 +13,14 @@ import (
 type LSM9DS1 struct {
 	device     Device
 	mut        sync.Mutex
+	cal        Calibration
+	mo         float64
 	cached     time.Time
 	ax, ay, az int16
 	mx, my, mz int16
-	cal        calibration
 }
 
-type calibration struct {
+type Calibration struct {
 	MinX, MaxX int16
 	MinY, MaxY int16
 	MinZ, MaxZ int16
@@ -44,7 +42,7 @@ const (
 	lsm9ds1MagnZOutLReg  = 0x2c
 )
 
-func NewLSM9DS1(dev Device) (*LSM9DS1, error) {
+func NewLSM9DS1(dev Device, magnOffs float64, cal Calibration) (*LSM9DS1, error) {
 	// Initialize sensors
 
 	if err := dev.SetAddress(lsm9ds1AccelAddress); err != nil {
@@ -60,7 +58,7 @@ func NewLSM9DS1(dev Device) (*LSM9DS1, error) {
 		return nil, fmt.Errorf("write control register: %w", err)
 	}
 
-	return &LSM9DS1{device: dev}, nil
+	return &LSM9DS1{device: dev, cal: cal, mo: magnOffs}, nil
 }
 
 func (s *LSM9DS1) Refresh(age time.Duration) error {
@@ -97,6 +95,12 @@ func (s *LSM9DS1) Refresh(age time.Duration) error {
 	return nil
 }
 
+func (s *LSM9DS1) Calibration() Calibration {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.cal
+}
+
 func (s *LSM9DS1) Acceleration() (x, y, z int16) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -121,67 +125,27 @@ func (s *LSM9DS1) MagneticAngles() (a, b, c float64) {
 	x := float64(s.mx - (s.cal.MaxX+s.cal.MinX)/2)
 	y := float64(s.my - (s.cal.MaxY+s.cal.MinY)/2)
 	z := float64(s.mz - (s.cal.MaxZ+s.cal.MinZ)/2)
-	return compass(math.Atan2(y, x) / math.Pi * 180), compass(math.Atan2(y, z) / math.Pi * 180), compass(math.Atan2(x, z) / math.Pi * 180)
-}
-
-func compass(v float64) float64 {
-	for v > 360 {
-		v -= 360
-	}
-	for v < 0 {
-		v += 360
-	}
-	return v
+	return compass(y, x, s.mo), compass(y, z, s.mo), compass(x, z, s.mo)
 }
 
 func (s *LSM9DS1) updateCalibration(x, y, z int16) {
-	dirty := false
 	if x > s.cal.MaxX {
 		s.cal.MaxX = x
-		dirty = true
 	}
 	if x < s.cal.MinX {
 		s.cal.MinX = x
-		dirty = true
 	}
 	if y > s.cal.MaxY {
 		s.cal.MaxY = y
-		dirty = true
 	}
 	if y < s.cal.MinY {
 		s.cal.MinY = y
-		dirty = true
 	}
 	if z > s.cal.MaxZ {
 		s.cal.MaxZ = z
-		dirty = true
 	}
 	if z < s.cal.MinZ {
 		s.cal.MinZ = z
-		dirty = true
-	}
-	if dirty {
-		fd, err := os.Create("calibration.lsm9ds1")
-		if err != nil {
-			log.Println("save calibration:", err)
-			return
-		}
-		defer fd.Close()
-		if err := binary.Write(fd, binary.BigEndian, s.cal); err != nil {
-			log.Println("save calibration:", err)
-			return
-		}
-	}
-}
-
-func (s *LSM9DS1) loadCalibration() {
-	fd, err := os.Open("calibration.lsm9ds1")
-	if err != nil {
-		return
-	}
-	defer fd.Close()
-	if err := binary.Read(fd, binary.BigEndian, &s.cal); err != nil {
-		return
 	}
 }
 
@@ -191,19 +155,19 @@ type AvgLSM9DS1 struct {
 	mut        sync.Mutex
 	accel      [][3]int16
 	angles     [][3]float64
-	po, ro, wo float64
+	ao, bo, co float64
 }
 
-func NewAvgLSM9DS1(total, intv time.Duration, lsm9ds1 *LSM9DS1, po, ro, wo float64) *AvgLSM9DS1 {
+func NewAvgLSM9DS1(total, intv time.Duration, lsm9ds1 *LSM9DS1, ao, bo, co float64) *AvgLSM9DS1 {
 	size := int(total / intv)
 	a := &AvgLSM9DS1{
 		LSM9DS1: lsm9ds1,
 		intv:    intv,
 		accel:   make([][3]int16, 0, size),
 		angles:  make([][3]float64, 0, size),
-		po:      po,
-		ro:      ro,
-		wo:      wo,
+		ao:      ao,
+		bo:      bo,
+		co:      co,
 	}
 	go a.serve()
 	return a
@@ -222,9 +186,9 @@ func (a *AvgLSM9DS1) update() {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 	x, y, z := a.LSM9DS1.Acceleration()
-	p := math.Atan(float64(z)/float64(y))/math.Pi*180 + a.po
-	r := math.Atan(float64(z)/float64(x))/math.Pi*180 + a.ro
-	w := math.Atan(float64(y)/float64(x))/math.Pi*180 + a.wo
+	p := angle(float64(z), float64(y), a.ao)
+	r := angle(float64(z), float64(x), a.bo)
+	w := angle(float64(y), float64(x), a.co)
 	if len(a.accel) < cap(a.accel) {
 		a.accel = append(a.accel, [3]int16{x, y, z})
 		a.angles = append(a.angles, [3]float64{p, r, w})
@@ -289,4 +253,19 @@ func (a *AvgLSM9DS1) Deviation() (p, r, w float64) {
 		}
 	}
 	return maxp - minp, maxr - minr, maxw - minw
+}
+
+func compass(y, x, o float64) float64 {
+	v := math.Atan2(y, x)/math.Pi*180 + o
+	for v > 360 {
+		v -= 360
+	}
+	for v < 0 {
+		v += 360
+	}
+	return v
+}
+
+func angle(y, x, o float64) float64 {
+	return compass(y, x, o) - 180
 }
