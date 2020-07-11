@@ -46,10 +46,10 @@ func main() {
 	if err != nil {
 		log.Fatalln("init LSM9DS1:", err)
 	}
-	alsm9ds1 := sensehat.NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *ao, *bo, *co)
+	alsm9ds1 := NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *ao, *bo, *co)
 
 	go func() {
-		for range time.NewTicker(time.Hour).C {
+		for range time.NewTicker(time.Minute).C {
 			cur := lsm9ds1.Calibration()
 			if cur != cal {
 				saveCalibration(*calfile, cur)
@@ -61,7 +61,7 @@ func main() {
 	servePrometheus(*promaddr, hts221, lps25h, alsm9ds1)
 }
 
-func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS25H, lsm9ds1 *sensehat.AvgLSM9DS1) {
+func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS25H, lsm9ds1 *AvgLSM9DS1) {
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "sensors",
 		Subsystem: "hts221",
@@ -164,7 +164,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		Name:        "compass_deg",
 		ConstLabels: prometheus.Labels{"plane": "a"},
 	}, func() float64 {
-		a, _, _ := lsm9ds1.MagneticAngles()
+		a, _, _ := lsm9ds1.Compass()
 		return round(a, 2)
 	})
 
@@ -174,7 +174,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		Name:        "compass_deg",
 		ConstLabels: prometheus.Labels{"plane": "b"},
 	}, func() float64 {
-		_, b, _ := lsm9ds1.MagneticAngles()
+		_, b, _ := lsm9ds1.Compass()
 		return round(b, 2)
 	})
 
@@ -184,7 +184,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		Name:        "compass_deg",
 		ConstLabels: prometheus.Labels{"plane": "c"},
 	}, func() float64 {
-		_, _, c := lsm9ds1.MagneticAngles()
+		_, _, c := lsm9ds1.Compass()
 		return round(c, 2)
 	})
 
