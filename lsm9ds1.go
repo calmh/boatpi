@@ -2,6 +2,7 @@ package sensehat
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -34,13 +35,17 @@ const (
 	lsm9ds1AccelYOutXLReg  = 0x2a
 	lsm9ds1AccelZOutXLReg  = 0x2c
 
-	lsm9ds1MagnAddress   = 0x1c
-	lsm9ds1MagnCtrlReg3M = 0x22
-	lsm9ds1MagnInitData  = 0b_00_0_000_00
-	lsm9ds1MagnXOutLReg  = 0x28
-	lsm9ds1MagnYOutLReg  = 0x2a
-	lsm9ds1MagnZOutLReg  = 0x2c
+	lsm9ds1MagnAddress  = 0x1c
+	lsm9ds1MagnXOutLReg = 0x28
+	lsm9ds1MagnYOutLReg = 0x2a
+	lsm9ds1MagnZOutLReg = 0x2c
 )
+
+var magnInitData = [][2]byte{
+	{0x20, 0b_1001_0000}, // CTRL_REG1_M
+	{0x21, 0b_0000_1100}, // CTRL_REG2_M
+	{0x22, 0b_0000_0000}, // CTRL_REG3_M
+}
 
 func NewLSM9DS1(dev Device, magnOffs float64, cal Calibration) (*LSM9DS1, error) {
 	// Initialize sensors
@@ -49,13 +54,15 @@ func NewLSM9DS1(dev Device, magnOffs float64, cal Calibration) (*LSM9DS1, error)
 		return nil, fmt.Errorf("set device address: %w", err)
 	}
 	if err := dev.WriteByteData(lsm9ds1AccelCtrlReg6XL, lsm9ds1AccelInitData); err != nil {
-		return nil, fmt.Errorf("write control register: %w", err)
+		return nil, fmt.Errorf("write control register 6_XL: %w", err)
 	}
 	if err := dev.SetAddress(lsm9ds1MagnAddress); err != nil {
 		return nil, fmt.Errorf("set device address: %w", err)
 	}
-	if err := dev.WriteByteData(lsm9ds1MagnCtrlReg3M, lsm9ds1MagnInitData); err != nil {
-		return nil, fmt.Errorf("write control register: %w", err)
+	for _, line := range magnInitData {
+		if err := dev.WriteByteData(line[0], line[1]); err != nil {
+			log.Printf("write control register 0x%02x->0x%02x: %v", line[1], line[0], err)
+		}
 	}
 
 	return &LSM9DS1{device: dev, cal: cal, mo: magnOffs}, nil
@@ -78,6 +85,9 @@ func (s *LSM9DS1) Refresh(age time.Duration) error {
 	s.ax = int16(r.signed(lsm9ds1AccelXOutXLReg+1, lsm9ds1AccelXOutXLReg))
 	s.ay = int16(r.signed(lsm9ds1AccelYOutXLReg+1, lsm9ds1AccelYOutXLReg))
 	s.az = int16(r.signed(lsm9ds1AccelZOutXLReg+1, lsm9ds1AccelZOutXLReg))
+	if r.error != nil {
+		return fmt.Errorf("read data: %w", r.error)
+	}
 
 	if err := s.device.SetAddress(lsm9ds1MagnAddress); err != nil {
 		return fmt.Errorf("set device address: %w", err)
@@ -86,11 +96,11 @@ func (s *LSM9DS1) Refresh(age time.Duration) error {
 	s.mx = int16(r.signed(lsm9ds1MagnXOutLReg+1, lsm9ds1MagnXOutLReg))
 	s.my = int16(r.signed(lsm9ds1MagnYOutLReg+1, lsm9ds1MagnYOutLReg))
 	s.mz = int16(r.signed(lsm9ds1MagnZOutLReg+1, lsm9ds1MagnZOutLReg))
-	s.updateCalibration(s.mx, s.my, s.mz)
-
 	if r.error != nil {
 		return fmt.Errorf("read data: %w", r.error)
 	}
+
+	s.updateCalibration(s.mx, s.my, s.mz)
 	s.cached = time.Now()
 	return nil
 }

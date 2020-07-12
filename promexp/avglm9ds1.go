@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ func NewAvgLSM9DS1(total, intv time.Duration, lsm9ds1 *sensehat.LSM9DS1, ao, bo,
 func (a *AvgLSM9DS1) serve() {
 	for range time.NewTicker(a.intv).C {
 		if err := a.LSM9DS1.Refresh(a.intv / 2); err != nil {
+			log.Println("refresh llsm9ds1:", err)
 			continue
 		}
 		a.update()
