@@ -133,22 +133,22 @@ func (s *LSM9DS1) Compass() (a, b, c float64) {
 }
 
 func (s *LSM9DS1) updateCalibration(x, y, z int16) {
-	if x > s.cal.MaxX {
+	if s.cal.MaxX == 0 || x > s.cal.MaxX {
 		s.cal.MaxX = x
 	}
-	if x < s.cal.MinX {
+	if s.cal.MinX == 0 || x < s.cal.MinX {
 		s.cal.MinX = x
 	}
-	if y > s.cal.MaxY {
+	if s.cal.MaxY == 0 || y > s.cal.MaxY {
 		s.cal.MaxY = y
 	}
-	if y < s.cal.MinY {
+	if s.cal.MinY == 0 || y < s.cal.MinY {
 		s.cal.MinY = y
 	}
-	if z > s.cal.MaxZ {
+	if s.cal.MaxZ == 0 || z > s.cal.MaxZ {
 		s.cal.MaxZ = z
 	}
-	if z < s.cal.MinZ {
+	if s.cal.MinZ == 0 || z < s.cal.MinZ {
 		s.cal.MinZ = z
 	}
 }
