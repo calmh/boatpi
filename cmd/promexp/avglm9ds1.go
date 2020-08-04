@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kastelo-labs/sensehat"
+	"github.com/calmh/boatpi/sensehat"
 )
 
 type AvgLSM9DS1 struct {

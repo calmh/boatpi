@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/kastelo-labs/sensehat"
+	"github.com/calmh/boatpi/sensehat"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
