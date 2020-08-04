@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -318,7 +318,9 @@ func saveCalibration(file string, cal sensehat.Calibration) error {
 	if err != nil {
 		return err
 	}
-	if err := binary.Write(fd, binary.BigEndian, &cal); err != nil {
+	enc := json.NewEncoder(fd)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(&cal); err != nil {
 		fd.Close()
 		return err
 	}
@@ -333,7 +335,8 @@ func loadCalibration(file string) sensehat.Calibration {
 	defer fd.Close()
 
 	var cal sensehat.Calibration
-	if err := binary.Read(fd, binary.BigEndian, &cal); err != nil {
+	dec := json.NewDecoder(fd)
+	if err := dec.Decode(&cal); err != nil {
 		return sensehat.Calibration{}
 	}
 
