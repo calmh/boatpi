@@ -82,7 +82,7 @@ func calibrate(dev sensehat.Device, calfile string) {
 		x, y, z := lsm9ds1.MagneticField()
 		a, b, c := lsm9ds1.Compass()
 		cal := lsm9ds1.Calibration()
-		fmt.Printf("%6d,%6d,%6d,%4.0f,%4.0f,%4.0f,%6d,%6d,%6d,%6d,%6d,%6d\n", x, y, z, a, b, c, cal.MaxX, cal.MinX, cal.MaxY, cal.MinY, cal.MaxZ, cal.MinZ)
+		fmt.Printf("%6d,%6d,%6d,%4.0f,%4.0f,%4.0f,%6d,%6d,%6d,%6d,%6d,%6d\n", x, y, z, a, b, c, cal.Max.X, cal.Min.X, cal.Max.Y, cal.Min.Y, cal.Max.Z, cal.Min.Z)
 		time.Sleep(150 * time.Millisecond)
 		i++
 		if cs != cal && time.Since(ts) > time.Second {
@@ -134,7 +134,37 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "accel_median_degrees",
+		Name:        "accel_field",
+		ConstLabels: prometheus.Labels{"direction": "x"},
+	}, func() float64 {
+		x, _, _ := lsm9ds1.Acceleration()
+		return float64(x)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "accel_field",
+		ConstLabels: prometheus.Labels{"direction": "y"},
+	}, func() float64 {
+		_, y, _ := lsm9ds1.Acceleration()
+		return float64(y)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "accel_field",
+		ConstLabels: prometheus.Labels{"direction": "z"},
+	}, func() float64 {
+		_, _, z := lsm9ds1.Acceleration()
+		return float64(z)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "accel_angle_degrees",
 		ConstLabels: prometheus.Labels{"plane": "a"},
 	}, func() float64 {
 		a, _, _ := lsm9ds1.AccelAngles()
@@ -144,7 +174,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "accel_median_degrees",
+		Name:        "accel_angle_degrees",
 		ConstLabels: prometheus.Labels{"plane": "b"},
 	}, func() float64 {
 		_, b, _ := lsm9ds1.AccelAngles()
@@ -154,7 +184,7 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace:   "sensors",
 		Subsystem:   "lsm9ds1",
-		Name:        "accel_median_degrees",
+		Name:        "accel_angle_degrees",
 		ConstLabels: prometheus.Labels{"plane": "c"},
 	}, func() float64 {
 		_, _, c := lsm9ds1.AccelAngles()
@@ -219,6 +249,29 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 	}, func() float64 {
 		_, _, c := lsm9ds1.Compass()
 		return round(c, 2)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "sensors",
+		Subsystem:   "lsm9ds1",
+		Name:        "compass_degrees",
+		ConstLabels: prometheus.Labels{"plane": "s"},
+	}, func() float64 {
+		x, y, z := lsm9ds1.Acceleration()
+		x &^= 1 << 14
+		y &^= 1 << 14
+		z &^= 1 << 14
+		yxc, yzc, xzc := lsm9ds1.Compass()
+		sc := 0.0
+		switch {
+		case x > y && x > z:
+			sc = yzc
+		case y > x && y > z:
+			sc = xzc
+		case z > x && z > y:
+			sc = yxc
+		}
+		return round(sc, 2)
 	})
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{

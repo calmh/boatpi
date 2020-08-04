@@ -21,10 +21,13 @@ type LSM9DS1 struct {
 	mx, my, mz int16
 }
 
+type Point struct {
+	X, Y, Z int16
+}
+
 type Calibration struct {
-	MinX, MaxX int16
-	MinY, MaxY int16
-	MinZ, MaxZ int16
+	Min Point
+	Max Point
 }
 
 const (
@@ -126,30 +129,30 @@ func (s *LSM9DS1) MagneticField() (x, y, z int16) {
 func (s *LSM9DS1) Compass() (a, b, c float64) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	x := float64(s.mx - (s.cal.MaxX+s.cal.MinX)/2)
-	y := float64(s.my - (s.cal.MaxY+s.cal.MinY)/2)
-	z := float64(s.mz - (s.cal.MaxZ+s.cal.MinZ)/2)
+	x := float64(s.mx - (s.cal.Max.X+s.cal.Min.X)/2)
+	y := float64(s.my - (s.cal.Max.Y+s.cal.Min.Y)/2)
+	z := float64(s.mz - (s.cal.Max.Z+s.cal.Min.Z)/2)
 	return compass(y, x, s.mo), compass(y, z, s.mo), compass(x, z, s.mo)
 }
 
 func (s *LSM9DS1) updateCalibration(x, y, z int16) {
-	if s.cal.MaxX == 0 || x > s.cal.MaxX {
-		s.cal.MaxX = x
+	if s.cal.Max.X == 0 || x > s.cal.Max.X {
+		s.cal.Max.X = x
 	}
-	if s.cal.MinX == 0 || x < s.cal.MinX {
-		s.cal.MinX = x
+	if s.cal.Min.X == 0 || x < s.cal.Min.X {
+		s.cal.Min.X = x
 	}
-	if s.cal.MaxY == 0 || y > s.cal.MaxY {
-		s.cal.MaxY = y
+	if s.cal.Max.Y == 0 || y > s.cal.Max.Y {
+		s.cal.Max.Y = y
 	}
-	if s.cal.MinY == 0 || y < s.cal.MinY {
-		s.cal.MinY = y
+	if s.cal.Min.Y == 0 || y < s.cal.Min.Y {
+		s.cal.Min.Y = y
 	}
-	if s.cal.MaxZ == 0 || z > s.cal.MaxZ {
-		s.cal.MaxZ = z
+	if s.cal.Max.Z == 0 || z > s.cal.Max.Z {
+		s.cal.Max.Z = z
 	}
-	if s.cal.MinZ == 0 || z < s.cal.MinZ {
-		s.cal.MinZ = z
+	if s.cal.Min.Z == 0 || z < s.cal.Min.Z {
+		s.cal.Min.Z = z
 	}
 }
 

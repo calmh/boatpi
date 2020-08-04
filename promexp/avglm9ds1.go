@@ -61,16 +61,6 @@ func (a *AvgLSM9DS1) update() {
 	}
 }
 
-func (a *AvgLSM9DS1) Acceleration() (x, y, z int16) {
-	a.mut.Lock()
-	defer a.mut.Unlock()
-	if len(a.accel) == 0 {
-		return 0, 0, 0
-	}
-	i := len(a.accel) / 2
-	return a.accel[i][0], a.accel[i][1], a.accel[i][2]
-}
-
 func (a *AvgLSM9DS1) AccelAngles() (p, r, w float64) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
