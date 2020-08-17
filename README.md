@@ -1,4 +1,3 @@
-# sensehat
+# boatpi
 
-This is a small driver module for the Raspberry Pi Sense HAT.
-
+This is a small kit for my boat.
