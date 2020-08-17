@@ -6,13 +6,15 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/calmh/boatpi/i2c"
 )
 
 // ST LSM9DS1 iNEMO inertial module, 3D magnetometer, 3D accelerometer, 3D
 // gyroscope
 
 type LSM9DS1 struct {
-	device     Device
+	device     i2c.Device
 	mut        sync.Mutex
 	cal        Calibration
 	mo         float64
@@ -50,7 +52,7 @@ var magnInitData = [][2]byte{
 	{0x22, 0b_0000_0000}, // CTRL_REG3_M
 }
 
-func NewLSM9DS1(dev Device, magnOffs float64, cal Calibration) (*LSM9DS1, error) {
+func NewLSM9DS1(dev i2c.Device, magnOffs float64, cal Calibration) (*LSM9DS1, error) {
 	// Initialize sensors
 
 	if err := dev.SetAddress(lsm9ds1AccelAddress); err != nil {
@@ -79,28 +81,28 @@ func (s *LSM9DS1) Refresh(age time.Duration) error {
 		return nil
 	}
 
-	r := newDevReader(s.device)
+	r := i2c.NewReader(s.device)
 
 	if err := s.device.SetAddress(lsm9ds1AccelAddress); err != nil {
 		return fmt.Errorf("set device address: %w", err)
 	}
 
-	s.ax = int16(r.signed(lsm9ds1AccelXOutXLReg+1, lsm9ds1AccelXOutXLReg))
-	s.ay = int16(r.signed(lsm9ds1AccelYOutXLReg+1, lsm9ds1AccelYOutXLReg))
-	s.az = int16(r.signed(lsm9ds1AccelZOutXLReg+1, lsm9ds1AccelZOutXLReg))
-	if r.error != nil {
-		return fmt.Errorf("read data: %w", r.error)
+	s.ax = int16(r.Signed(lsm9ds1AccelXOutXLReg+1, lsm9ds1AccelXOutXLReg))
+	s.ay = int16(r.Signed(lsm9ds1AccelYOutXLReg+1, lsm9ds1AccelYOutXLReg))
+	s.az = int16(r.Signed(lsm9ds1AccelZOutXLReg+1, lsm9ds1AccelZOutXLReg))
+	if err := r.Error(); err != nil {
+		return fmt.Errorf("read data: %w", err)
 	}
 
 	if err := s.device.SetAddress(lsm9ds1MagnAddress); err != nil {
 		return fmt.Errorf("set device address: %w", err)
 	}
 
-	s.mx = int16(r.signed(lsm9ds1MagnXOutLReg+1, lsm9ds1MagnXOutLReg))
-	s.my = int16(r.signed(lsm9ds1MagnYOutLReg+1, lsm9ds1MagnYOutLReg))
-	s.mz = int16(r.signed(lsm9ds1MagnZOutLReg+1, lsm9ds1MagnZOutLReg))
-	if r.error != nil {
-		return fmt.Errorf("read data: %w", r.error)
+	s.mx = int16(r.Signed(lsm9ds1MagnXOutLReg+1, lsm9ds1MagnXOutLReg))
+	s.my = int16(r.Signed(lsm9ds1MagnYOutLReg+1, lsm9ds1MagnYOutLReg))
+	s.mz = int16(r.Signed(lsm9ds1MagnZOutLReg+1, lsm9ds1MagnZOutLReg))
+	if err := r.Error(); err != nil {
+		return fmt.Errorf("read data: %w", err)
 	}
 
 	s.updateCalibration(s.mx, s.my, s.mz)

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/calmh/boatpi/i2c"
 )
 
 // ST HTS221 Humidity & Temperature Sensor
@@ -19,7 +21,7 @@ type HTS221 struct {
 	t1Out   float64
 	tSlope  float64
 	hSlope  float64
-	device  Device
+	device  i2c.Device
 
 	mut         sync.Mutex
 	cached      time.Time
@@ -50,7 +52,7 @@ const (
 	t1OutRegH         = 0x3f
 )
 
-func NewHTS221(dev Device) (*HTS221, error) {
+func NewHTS221(dev i2c.Device) (*HTS221, error) {
 	// Initialize sensor
 
 	if err := dev.SetAddress(hts221Address); err != nil {
@@ -64,25 +66,25 @@ func NewHTS221(dev Device) (*HTS221, error) {
 
 	// Read calibration data
 
-	r := newDevReader(dev)
+	r := i2c.NewReader(dev)
 
-	s.h0rH = float64(r.byte(h0rHx2Reg)) / 2
-	s.h1rH = float64(r.byte(h1rHx2Reg)) / 2
-	s.t0degC = float64(r.byte(t0degCx8Reg))
-	s.t1degC = float64(r.byte(t1degCx8Reg))
-	t1t0msb := r.byte(t1t0msbReg)
+	s.h0rH = float64(r.Byte(h0rHx2Reg)) / 2
+	s.h1rH = float64(r.Byte(h1rHx2Reg)) / 2
+	s.t0degC = float64(r.Byte(t0degCx8Reg))
+	s.t1degC = float64(r.Byte(t1degCx8Reg))
+	t1t0msb := r.Byte(t1t0msbReg)
 	s.t0degC += float64((t1t0msb & 0x3) << 8)
 	s.t1degC += float64((t1t0msb & 0xc) << 6)
 	s.t0degC /= 8
 	s.t1degC /= 8
 
-	s.h0t0Out = float64(r.signed(h0t0OutRegH, h0t0OutRegL))
-	s.h1t0Out = float64(r.signed(h1t0OutRegH, h1t0OutRegL))
-	s.t0Out = float64(r.signed(t0OutRegH, t0OutRegL))
-	s.t1Out = float64(r.signed(t1OutRegH, t1OutRegL))
+	s.h0t0Out = float64(r.Signed(h0t0OutRegH, h0t0OutRegL))
+	s.h1t0Out = float64(r.Signed(h1t0OutRegH, h1t0OutRegL))
+	s.t0Out = float64(r.Signed(t0OutRegH, t0OutRegL))
+	s.t1Out = float64(r.Signed(t1OutRegH, t1OutRegL))
 
-	if r.error != nil {
-		return nil, fmt.Errorf("read calibration data: %w", r.error)
+	if err := r.Error(); err != nil {
+		return nil, fmt.Errorf("read calibration data: %w", err)
 	}
 
 	s.tSlope = (s.t1degC - s.t0degC) / (s.t1Out - s.t0Out)
@@ -103,13 +105,13 @@ func (s *HTS221) Refresh(age time.Duration) error {
 		return fmt.Errorf("set device address: %w", err)
 	}
 
-	r := newDevReader(s.device)
+	r := i2c.NewReader(s.device)
 
-	s.humidity = (float64(r.signed(hts221HumOutHReg, hts221HumOutLReg))-s.h0t0Out)*s.hSlope + s.h0rH
-	s.temperature = (float64(r.signed(hts221TempOutHReg, hts221TempOutLReg))-s.t0Out)*s.tSlope + s.t0degC
+	s.humidity = (float64(r.Signed(hts221HumOutHReg, hts221HumOutLReg))-s.h0t0Out)*s.hSlope + s.h0rH
+	s.temperature = (float64(r.Signed(hts221TempOutHReg, hts221TempOutLReg))-s.t0Out)*s.tSlope + s.t0degC
 
-	if r.error != nil {
-		return fmt.Errorf("read data: %w", r.error)
+	if err := r.Error(); err != nil {
+		return fmt.Errorf("read data: %w", err)
 	}
 
 	s.cached = time.Now()

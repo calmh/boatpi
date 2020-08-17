@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/calmh/boatpi/i2c"
 )
 
 // ST LPS25H Pressure & Temperature Sensor
 
 type LPS25H struct {
-	device      Device
+	device      i2c.Device
 	mut         sync.Mutex
 	cached      time.Time
 	temperature float64
@@ -27,7 +29,7 @@ const (
 	lps25hTempOutHReg  = 0x2c
 )
 
-func NewLPS25H(dev Device) (*LPS25H, error) {
+func NewLPS25H(dev i2c.Device) (*LPS25H, error) {
 	// Initialize sensor
 
 	if err := dev.SetAddress(lps25hAddress); err != nil {
@@ -52,14 +54,14 @@ func (s *LPS25H) Refresh(age time.Duration) error {
 		return fmt.Errorf("set device address: %w", err)
 	}
 
-	r := newDevReader(s.device)
+	r := i2c.NewReader(s.device)
 
 	// Numeric constants from data sheet
-	s.pressure = float64(r.signed(lps25hPressOutHReg, lps25hPressOutLReg, lps25HressOutXLReg)) / 4096
-	s.temperature = float64(r.signed(lps25hTempOutHReg, lps25hTempOutLReg))/480 + 42.5
+	s.pressure = float64(r.Signed(lps25hPressOutHReg, lps25hPressOutLReg, lps25HressOutXLReg)) / 4096
+	s.temperature = float64(r.Signed(lps25hTempOutHReg, lps25hTempOutLReg))/480 + 42.5
 
-	if r.error != nil {
-		return fmt.Errorf("read data: %w", r.error)
+	if err := r.Error(); err != nil {
+		return fmt.Errorf("read data: %w", err)
 	}
 	s.cached = time.Now()
 	return nil

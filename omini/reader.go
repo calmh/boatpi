@@ -1,4 +1,4 @@
-package sensehat
+package omini
 
 import "fmt"
 

@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/calmh/boatpi/i2c"
+	"github.com/calmh/boatpi/omini"
 	"github.com/calmh/boatpi/sensehat"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -51,6 +53,7 @@ func main() {
 		log.Fatalln("init LSM9DS1:", err)
 	}
 	alsm9ds1 := NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *ao, *bo, *co)
+	registerSensehat(hts221, lps25h, alsm9ds1)
 
 	go func() {
 		for range time.NewTicker(time.Minute).C {
@@ -62,10 +65,14 @@ func main() {
 		}
 	}()
 
-	servePrometheus(*promaddr, hts221, lps25h, alsm9ds1)
+	omini := omini.New(dev)
+	registerOmini(omini)
+
+	http.Handle("/metrics", promhttp.Handler())
+	http.ListenAndServe(*promaddr, nil)
 }
 
-func calibrate(dev sensehat.Device, calfile string) {
+func calibrate(dev i2c.Device, calfile string) {
 	lsm9ds1, err := sensehat.NewLSM9DS1(dev, 0, sensehat.Calibration{})
 	if err != nil {
 		log.Fatalln("init LSM9DS1:", err)
@@ -94,7 +101,7 @@ func calibrate(dev sensehat.Device, calfile string) {
 	}
 }
 
-func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS25H, lsm9ds1 *AvgLSM9DS1) {
+func registerSensehat(hts221 *sensehat.HTS221, lps25h *sensehat.LPS25H, lsm9ds1 *AvgLSM9DS1) {
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "sensors",
 		Subsystem: "hts221",
@@ -304,8 +311,6 @@ func servePrometheus(addr string, hts221 *sensehat.HTS221, lps25h *sensehat.LPS2
 		return float64(z)
 	})
 
-	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(addr, nil)
 }
 
 func round(x float64, prec int) float64 {
@@ -341,4 +346,42 @@ func loadCalibration(file string) sensehat.Calibration {
 	}
 
 	return cal
+}
+
+func registerOmini(omini *omini.Omini) {
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "sensors",
+		Subsystem: "omini",
+		Name:      "channel_a_volts",
+	}, func() float64 {
+		v, err := omini.ChannelAVoltage()
+		if err != nil {
+			return 0
+		}
+		return round(v, 2)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "sensors",
+		Subsystem: "omini",
+		Name:      "channel_b_volts",
+	}, func() float64 {
+		v, err := omini.ChannelBVoltage()
+		if err != nil {
+			return 0
+		}
+		return round(v, 2)
+	})
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "sensors",
+		Subsystem: "omini",
+		Name:      "channel_c_volts",
+	}, func() float64 {
+		v, err := omini.ChannelCVoltage()
+		if err != nil {
+			return 0
+		}
+		return round(v, 2)
+	})
 }
