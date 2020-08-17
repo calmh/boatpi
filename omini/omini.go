@@ -3,10 +3,12 @@ package omini
 import (
 	"fmt"
 	"sync"
+
+	"github.com/calmh/boatpi/i2c"
 )
 
 type Omini struct {
-	dev Device
+	dev i2c.Device
 	mut sync.Mutex
 }
 
@@ -17,7 +19,7 @@ const (
 	ominiChannelCRegHi = 5
 )
 
-func New(dev Device) *Omini {
+func New(dev i2c.Device) *Omini {
 	return &Omini{dev: dev}
 }
 
@@ -41,10 +43,10 @@ func (s *Omini) voltage(regHi uint8) (float64, error) {
 		return 0, fmt.Errorf("set device address: %w", err)
 	}
 
-	r := newDevReader(s.dev)
-	v := float64(r.signed(regHi)) + float64(r.signed(regHi+1))/100
-	if r.error != nil {
-		return 0, fmt.Errorf("read data: %w", r.error)
+	r := i2c.NewReader(s.dev)
+	v := float64(r.Signed(regHi)) + float64(r.Signed(regHi+1))/100
+	if err := r.Error(); err != nil {
+		return 0, fmt.Errorf("read data: %w", err)
 	}
 
 	return v, nil
