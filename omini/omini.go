@@ -23,31 +23,18 @@ func New(dev i2c.Device) *Omini {
 	return &Omini{dev: dev}
 }
 
-func (s *Omini) ChannelAVoltage() (float64, error) {
-	return s.voltage(ominiChannelARegHi)
-}
-
-func (s *Omini) ChannelBVoltage() (float64, error) {
-	return s.voltage(ominiChannelBRegHi)
-}
-
-func (s *Omini) ChannelCVoltage() (float64, error) {
-	return s.voltage(ominiChannelCRegHi)
-}
-
-func (s *Omini) voltage(regHi uint8) (float64, error) {
+func (s *Omini) Voltages() (a, b, c float64, err error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
 	if err := s.dev.SetAddress(ominiAddress); err != nil {
-		return 0, fmt.Errorf("set device address: %w", err)
+		return 0, 0, 0, fmt.Errorf("set device address: %w", err)
 	}
 
 	r := i2c.NewReader(s.dev)
-	v := float64(r.Signed(regHi)) + float64(r.Signed(regHi+1))/100
-	if err := r.Error(); err != nil {
-		return 0, fmt.Errorf("read data: %w", err)
-	}
-
-	return v, nil
+	a = float64(r.Signed(ominiChannelARegHi)) + float64(r.Signed(ominiChannelARegHi+1))/100
+	b = float64(r.Signed(ominiChannelBRegHi)) + float64(r.Signed(ominiChannelBRegHi+1))/100
+	c = float64(r.Signed(ominiChannelCRegHi)) + float64(r.Signed(ominiChannelCRegHi+1))/100
+	err = r.Error()
+	return
 }
