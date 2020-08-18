@@ -20,9 +20,6 @@ import (
 func main() {
 	device := flag.String("device", "/dev/i2c-1", "I2C device")
 	promaddr := flag.String("prometheus", ":9120", "Prometheus exporter address")
-	ao := flag.Float64("ao", 0, "Accel A offset (degrees)")
-	bo := flag.Float64("bo", 0, "Accel B offset (degrees)")
-	co := flag.Float64("co", 0, "Accel C offset (degrees)")
 	mo := flag.Float64("mo", 0, "Magnetic compass offset (degrees)")
 	calfile := flag.String("calibration-file", "calibration.lsm9ds1", "Calibration file")
 	flag.Parse()
@@ -32,7 +29,7 @@ func main() {
 		log.Fatalln("open I2C device:", err)
 	}
 
-	var update []func()
+	var update funcs
 
 	lps25h, err := sensehat.NewLPS25H(dev)
 	if err != nil {
@@ -51,17 +48,16 @@ func main() {
 	if err != nil {
 		log.Fatalln("init LSM9DS1:", err)
 	}
-	alsm9ds1 := NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1, *ao, *bo, *co)
+	alsm9ds1 := NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1)
 	update = append(update, registerLSM9DS1(alsm9ds1))
 
 	omini := omini.New(dev)
 	update = append(update, registerOmini(omini))
 
 	go func() {
+		update.call()
 		for range time.NewTicker(15 * time.Second).C {
-			for _, fn := range update {
-				fn()
-			}
+			update.call()
 		}
 	}()
 
@@ -77,6 +73,14 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(*promaddr, nil)
+}
+
+type funcs []func()
+
+func (fs funcs) call() {
+	for _, fn := range fs {
+		fn()
+	}
 }
 
 func registerHTS221(hts221 *sensehat.HTS221) func() {
@@ -166,32 +170,35 @@ func registerLSM9DS1(lsm9ds1 *AvgLSM9DS1) func() {
 		accel.WithLabelValues("x").Set(float64(x))
 		accel.WithLabelValues("y").Set(float64(y))
 		accel.WithLabelValues("z").Set(float64(z))
-		a, b, c := lsm9ds1.AccelAngles()
-		accelA.WithLabelValues("a").Set(round(a, 2))
-		accelA.WithLabelValues("b").Set(round(b, 2))
-		accelA.WithLabelValues("c").Set(round(c, 2))
-		a, b, c = lsm9ds1.Deviation()
-		devA.WithLabelValues("a").Set(round(a, 2))
-		devA.WithLabelValues("b").Set(round(b, 2))
-		devA.WithLabelValues("c").Set(round(c, 2))
-		a, b, c = lsm9ds1.Compass()
-		compA.WithLabelValues("a").Set(round(a, 2))
-		compA.WithLabelValues("b").Set(round(b, 2))
-		compA.WithLabelValues("c").Set(round(c, 2))
+		xy, xz, yz := lsm9ds1.AccelAngles()
+		accelA.WithLabelValues("xy").Set(round(xy, 2))
+		accelA.WithLabelValues("xz").Set(round(xz, 2))
+		accelA.WithLabelValues("yz").Set(round(yz, 2))
+		xy, xz, yz = lsm9ds1.Deviation()
+		devA.WithLabelValues("xy").Set(round(xy, 2))
+		devA.WithLabelValues("xz").Set(round(xz, 2))
+		devA.WithLabelValues("yz").Set(round(yz, 2))
+		xy, xz, yz = lsm9ds1.Compass()
+		compA.WithLabelValues("xy").Set(round(xy, 2))
+		compA.WithLabelValues("xz").Set(round(xz, 2))
+		compA.WithLabelValues("yz").Set(round(yz, 2))
 
 		x &^= 1 << 14
 		y &^= 1 << 14
 		z &^= 1 << 14
-		sc := 0.0
+		h := 0.0
 		switch {
 		case x > y && x > z:
-			sc = b
+			// x is down
+			h = yz
 		case y > x && y > z:
-			sc = c
+			// y is down
+			h = xz
 		case z > x && z > y:
-			sc = a
+			// z is down
+			h = xy
 		}
-		compA.WithLabelValues("horiz").Set(round(sc, 2))
+		compA.WithLabelValues("horiz").Set(round(h, 2))
 
 		x, y, z = lsm9ds1.MagneticField()
 		compF.WithLabelValues("x").Set(float64(x))

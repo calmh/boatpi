@@ -32,9 +32,17 @@ func (s *Omini) Voltages() (a, b, c float64, err error) {
 	}
 
 	r := i2c.NewReader(s.dev)
-	a = float64(r.Signed(ominiChannelARegHi)) + float64(r.Signed(ominiChannelARegHi+1))/100
-	b = float64(r.Signed(ominiChannelBRegHi)) + float64(r.Signed(ominiChannelBRegHi+1))/100
-	c = float64(r.Signed(ominiChannelCRegHi)) + float64(r.Signed(ominiChannelCRegHi+1))/100
+	bs, err := r.Read(
+		ominiChannelARegHi, ominiChannelARegHi+1,
+		ominiChannelBRegHi, ominiChannelBRegHi+1,
+		ominiChannelCRegHi, ominiChannelCRegHi+1,
+	)
+	if err == nil {
+		// We sometimes seem to get the high bit set spuriously
+		a = float64(bs[0]&^128) + float64(bs[1]&^128)/100
+		b = float64(bs[2]&^128) + float64(bs[3]&^128)/100
+		c = float64(bs[4]&^128) + float64(bs[5]&^128)/100
+	}
 	err = r.Error()
 	return
 }

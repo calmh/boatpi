@@ -128,13 +128,13 @@ func (s *LSM9DS1) MagneticField() (x, y, z int16) {
 	return s.mx, s.my, s.mz
 }
 
-func (s *LSM9DS1) Compass() (a, b, c float64) {
+func (s *LSM9DS1) Compass() (xy, xz, yz float64) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	x := float64(s.mx - (s.cal.Max.X+s.cal.Min.X)/2)
 	y := float64(s.my - (s.cal.Max.Y+s.cal.Min.Y)/2)
 	z := float64(s.mz - (s.cal.Max.Z+s.cal.Min.Z)/2)
-	return compass(y, x, s.mo), compass(y, z, s.mo), compass(x, z, s.mo)
+	return compass(y, x, s.mo), compass(z, x, s.mo), compass(z, y, s.mo)
 }
 
 func (s *LSM9DS1) updateCalibration(x, y, z int16) {
