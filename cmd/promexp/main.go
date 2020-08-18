@@ -183,9 +183,9 @@ func registerLSM9DS1(lsm9ds1 *AvgLSM9DS1) func() {
 		compA.WithLabelValues("xz").Set(round(xz, 2))
 		compA.WithLabelValues("yz").Set(round(yz, 2))
 
-		x &^= 1 << 14
-		y &^= 1 << 14
-		z &^= 1 << 14
+		x = abs(x)
+		y = abs(y)
+		z = abs(z)
 		h := 0.0
 		switch {
 		case x > y && x > z:
@@ -205,6 +205,13 @@ func registerLSM9DS1(lsm9ds1 *AvgLSM9DS1) func() {
 		compF.WithLabelValues("y").Set(float64(y))
 		compF.WithLabelValues("z").Set(float64(z))
 	}
+}
+
+func abs(v int16) int16 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func registerOmini(omini *omini.Omini) func() {
