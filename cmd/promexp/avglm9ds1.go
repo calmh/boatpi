@@ -57,7 +57,7 @@ func (a *AvgLSM9DS1) update() {
 	}
 }
 
-func (a *AvgLSM9DS1) AccelAngles() (xy, xz, yz float64) {
+func (a *AvgLSM9DS1) MedianAccelerationAngles() (xy, xz, yz float64) {
 	a.mut.Lock()
 	defer a.mut.Unlock()
 	if len(a.angles) == 0 {

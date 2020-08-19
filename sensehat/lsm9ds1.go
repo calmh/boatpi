@@ -122,6 +122,15 @@ func (s *LSM9DS1) Acceleration() (x, y, z int16) {
 	return s.ax, s.ay, s.az
 }
 
+func (s *LSM9DS1) AccelerationAngles() (xy, xz, yz float64) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	xy = angle(float64(s.ay), float64(s.ax))
+	xz = angle(float64(s.az), float64(s.ax))
+	yz = angle(float64(s.az), float64(s.ay))
+	return xy, xz, yz
+}
+
 func (s *LSM9DS1) MagneticField() (x, y, z int16) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -164,6 +173,17 @@ func compass(y, x, o float64) float64 {
 		v -= 360
 	}
 	for v < 0 {
+		v += 360
+	}
+	return v
+}
+
+func angle(y, x float64) float64 {
+	v := math.Atan2(y, x) / math.Pi * 180
+	for v > 180 {
+		v -= 360
+	}
+	for v < -180 {
 		v += 360
 	}
 	return v

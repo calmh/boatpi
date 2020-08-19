@@ -56,7 +56,7 @@ func main() {
 
 	go func() {
 		update.call()
-		for range time.NewTicker(15 * time.Second).C {
+		for range time.NewTicker(1 * time.Second).C {
 			update.call()
 		}
 	}()
@@ -147,6 +147,27 @@ func registerLSM9DS1(lsm9ds1 *AvgLSM9DS1) func() {
 		Name:      "accel_angle_degrees",
 	}, []string{"plane"})
 
+	buckets := []float64{0}
+	for i := 1; i < 10; i++ {
+		buckets = append([]float64{float64(-i)}, buckets...)
+		buckets = append(buckets, float64(i))
+	}
+	for i := 10; i < 20; i += 2 {
+		buckets = append([]float64{float64(-i)}, buckets...)
+		buckets = append(buckets, float64(i))
+	}
+	for i := 20; i < 50; i += 5 {
+		buckets = append([]float64{float64(-i)}, buckets...)
+		buckets = append(buckets, float64(i))
+	}
+
+	accelAH := promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "sensors",
+		Subsystem: "lsm9ds1",
+		Name:      "accel_angle_degrees_histogram",
+		Buckets:   buckets,
+	}, []string{"plane"})
+
 	devA := promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "sensors",
 		Subsystem: "lsm9ds1",
@@ -170,10 +191,14 @@ func registerLSM9DS1(lsm9ds1 *AvgLSM9DS1) func() {
 		accel.WithLabelValues("x").Set(float64(x))
 		accel.WithLabelValues("y").Set(float64(y))
 		accel.WithLabelValues("z").Set(float64(z))
-		xy, xz, yz := lsm9ds1.AccelAngles()
+		xy, xz, yz := lsm9ds1.MedianAccelerationAngles()
 		accelA.WithLabelValues("xy").Set(round(xy, 2))
 		accelA.WithLabelValues("xz").Set(round(xz, 2))
 		accelA.WithLabelValues("yz").Set(round(yz, 2))
+		xy, xz, yz = lsm9ds1.AccelerationAngles()
+		accelAH.WithLabelValues("xy").Observe(xy)
+		accelAH.WithLabelValues("xz").Observe(xz)
+		accelAH.WithLabelValues("yz").Observe(yz)
 		xy, xz, yz = lsm9ds1.Deviation()
 		devA.WithLabelValues("xy").Set(round(xy, 2))
 		devA.WithLabelValues("xz").Set(round(xz, 2))
