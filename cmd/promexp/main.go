@@ -18,6 +18,9 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.Lshortfile)
+
 	device := flag.String("device", "/dev/i2c-1", "I2C device")
 	promaddr := flag.String("prometheus", ":9120", "Prometheus exporter address")
 	mo := flag.Float64("mo", 0, "Magnetic compass offset (degrees)")
