@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -268,6 +269,8 @@ func registerOmini(omini *omini.Omini) func() {
 		Name:      "voltage",
 	}, []string{"channel"})
 
+	logLine := ""
+
 	return func() {
 		a, b, c, err := omini.Voltages()
 		if err != nil {
@@ -278,7 +281,11 @@ func registerOmini(omini *omini.Omini) func() {
 			return
 		}
 
-		log.Printf("Omini: %.01f V, %.01f V, %.01f V", a, b, c)
+		newLogLine := fmt.Sprintf("Omini: %.01f V, %.01f V, %.01f V", a, b, c)
+		if newLogLine != logLine {
+			logLine = newLogLine
+			log.Println(logLine)
+		}
 
 		vv.WithLabelValues("a").Set(a)
 		vv.WithLabelValues("b").Set(b)
