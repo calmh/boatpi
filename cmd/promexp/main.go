@@ -2,13 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"log"
 	"math"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/calmh/boatpi/omini"
 	"github.com/calmh/boatpi/sensehat"
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,65 +17,84 @@ import (
 	"gobot.io/x/gobot/sysfs"
 )
 
+var cli struct {
+	Device          string  `default:"/dev/i2c-1"`
+	PrometheusAddr  string  `default:":9091"`
+	MagneticOffset  float64 `placeholder:"DEGREES"`
+	CalibrationFile string  `default:"calibration.lsm9ds1"`
+	WithLPS25H      bool    `name:"with-lps25h"`
+	WithHTS221      bool    `name:"with-hts221"`
+	WithLSM9DS1     bool    `name:"with-lsm9ds1"`
+	WithOmini       bool
+	UpdateInterval  time.Duration `default:"1s"`
+}
+
 func main() {
+	kong.Parse(&cli)
 	log.SetOutput(os.Stdout)
-	log.SetFlags(log.Lshortfile)
+	log.SetFlags(0)
 
-	device := flag.String("device", "/dev/i2c-1", "I2C device")
-	promaddr := flag.String("prometheus", ":9120", "Prometheus exporter address")
-	mo := flag.Float64("mo", 0, "Magnetic compass offset (degrees)")
-	calfile := flag.String("calibration-file", "calibration.lsm9ds1", "Calibration file")
-	flag.Parse()
-
-	dev, err := sysfs.NewI2cDevice(*device)
+	dev, err := sysfs.NewI2cDevice(cli.Device)
 	if err != nil {
 		log.Fatalln("open I2C device:", err)
 	}
 
 	var update funcs
 
-	lps25h, err := sensehat.NewLPS25H(dev)
-	if err != nil {
-		log.Fatalln("init LPS25H:", err)
+	if cli.WithLPS25H {
+		lps25h, err := sensehat.NewLPS25H(dev)
+		if err != nil {
+			log.Fatalln("init LPS25H:", err)
+		}
+		update = append(update, registerLPS25H(lps25h))
 	}
-	update = append(update, registerLPS25H(lps25h))
 
-	hts221, err := sensehat.NewHTS221(dev)
-	if err != nil {
-		log.Fatalln("init HTS221:", err)
+	if cli.WithHTS221 {
+		hts221, err := sensehat.NewHTS221(dev)
+		if err != nil {
+			log.Fatalln("init HTS221:", err)
+		}
+		update = append(update, registerHTS221(hts221))
 	}
-	update = append(update, registerHTS221(hts221))
 
-	cal := loadCalibration(*calfile)
-	lsm9ds1, err := sensehat.NewLSM9DS1(dev, *mo, cal)
-	if err != nil {
-		log.Fatalln("init LSM9DS1:", err)
+	if cli.WithLSM9DS1 {
+		cal := loadCalibration(cli.CalibrationFile)
+		lsm9ds1, err := sensehat.NewLSM9DS1(dev, cli.MagneticOffset, cal)
+		if err != nil {
+			log.Fatalln("init LSM9DS1:", err)
+		}
+		alsm9ds1 := NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1)
+		update = append(update, registerLSM9DS1(alsm9ds1))
+
+		go func() {
+			for range time.NewTicker(time.Minute).C {
+				cur := lsm9ds1.Calibration()
+				if cur != cal {
+					saveCalibration(cli.CalibrationFile, cur)
+					cal = cur
+				}
+			}
+		}()
 	}
-	alsm9ds1 := NewAvgLSM9DS1(time.Minute, 500*time.Millisecond, lsm9ds1)
-	update = append(update, registerLSM9DS1(alsm9ds1))
 
-	omini := omini.New(dev)
-	update = append(update, registerOmini(omini))
+	if cli.WithOmini {
+		omini := omini.New(dev)
+		update = append(update, registerOmini(omini))
+	}
+
+	if len(update) == 0 {
+		log.Fatal("No sensors enabled? Enable some sensors.")
+	}
 
 	go func() {
 		update.call()
-		for range time.NewTicker(1 * time.Second).C {
+		for range time.NewTicker(cli.UpdateInterval).C {
 			update.call()
 		}
 	}()
 
-	go func() {
-		for range time.NewTicker(time.Minute).C {
-			cur := lsm9ds1.Calibration()
-			if cur != cal {
-				saveCalibration(*calfile, cur)
-				cal = cur
-			}
-		}
-	}()
-
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(*promaddr, nil)
+	http.ListenAndServe(cli.PrometheusAddr, nil)
 }
 
 type funcs []func()
@@ -258,6 +277,8 @@ func registerOmini(omini *omini.Omini) func() {
 			vv.WithLabelValues("c").Set(0)
 			return
 		}
+
+		log.Printf("Omini: %.01f V, %.01f V, %.01f V", a, b, c)
 
 		vv.WithLabelValues("a").Set(a)
 		vv.WithLabelValues("b").Set(b)
