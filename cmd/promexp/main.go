@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -281,10 +282,22 @@ func registerOmini(omini *omini.Omini) func() {
 			return
 		}
 
-		newLogLine := fmt.Sprintf("Omini: %.01f V, %.01f V, %.01f V", a, b, c)
-		if newLogLine != logLine {
-			logLine = newLogLine
-			log.Println(logLine)
+		var vals []string
+		if a > 1 {
+			vals = append(vals, fmt.Sprintf("%.01f V", a))
+		}
+		if b > 1 {
+			vals = append(vals, fmt.Sprintf("%.01f V", b))
+		}
+		if c > 1 {
+			vals = append(vals, fmt.Sprintf("%.01f V", c))
+		}
+		if len(vals) > 0 {
+			newLogLine := fmt.Sprintf("Omini: %s", strings.Join(vals, ", "))
+			if newLogLine != logLine {
+				logLine = newLogLine
+				log.Println(logLine)
+			}
 		}
 
 		vv.WithLabelValues("a").Set(a)
