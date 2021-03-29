@@ -70,18 +70,25 @@ func (s *Omini) Voltages() (a, b, c float64, err error) {
 }
 
 func (s *Omini) voltages(r *i2c.Reader) (a, b, c float64) {
-	bs, err := r.Read(
-		ominiChannelARegHi, ominiChannelARegHi+1,
-		ominiChannelBRegHi, ominiChannelBRegHi+1,
-		ominiChannelCRegHi, ominiChannelCRegHi+1,
-	)
-	if err == nil {
-		// We sometimes seem to get the high bit set spuriously
-		a = float64(bs[0]&^128) + float64(bs[1]&^128)/100
-		b = float64(bs[2]&^128) + float64(bs[3]&^128)/100
-		c = float64(bs[4]&^128) + float64(bs[5]&^128)/100
+	for {
+		bs, err := r.Read(
+			ominiChannelARegHi, ominiChannelARegHi+1,
+			ominiChannelBRegHi, ominiChannelBRegHi+1,
+			ominiChannelCRegHi, ominiChannelCRegHi+1,
+		)
+		if err == nil {
+			// We sometimes seem to get the high bit set spuriously. Maybe
+			// it indicates the value changed while reading?
+			if (bs[0]&128 | bs[1]&128 | bs[2]&128 | bs[3]&128 | bs[4]&128 | bs[5]&128) != 0 {
+				continue
+			}
+
+			a = float64(bs[0]) + float64(bs[1])/100
+			b = float64(bs[2]) + float64(bs[3])/100
+			c = float64(bs[4]) + float64(bs[5])/100
+		}
+		return
 	}
-	return
 }
 
 type floatset []float64
