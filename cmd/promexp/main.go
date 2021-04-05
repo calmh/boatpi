@@ -284,13 +284,13 @@ func registerOmini(omini *omini.Omini) func() {
 
 		var vals []string
 		if a > 1 {
-			vals = append(vals, fmt.Sprintf("%.01f V", a))
+			vals = append(vals, fmt.Sprintf("%.01f V (%.0f %%)", a, batteryState.val(a)))
 		}
 		if b > 1 {
-			vals = append(vals, fmt.Sprintf("%.01f V", b))
+			vals = append(vals, fmt.Sprintf("%.01f V (%.0f %%)", b, batteryState.val(b)))
 		}
 		if c > 1 {
-			vals = append(vals, fmt.Sprintf("%.01f V", c))
+			vals = append(vals, fmt.Sprintf("%.01f V (%.0f %%)", c, batteryState.val(c)))
 		}
 		if len(vals) > 0 {
 			newLogLine := fmt.Sprintf("Omini: %s", strings.Join(vals, ", "))
@@ -339,4 +339,25 @@ func loadCalibration(file string) sensehat.Calibration {
 	}
 
 	return cal
+}
+
+var batteryState = interpolation{
+	x: []float64{11.8, 12.0, 12.2, 12.4, 12.7},
+	y: []float64{0, 25.0, 50.0, 75.0, 100},
+}
+
+type interpolation struct {
+	x, y []float64
+}
+
+func (n interpolation) val(x float64) float64 {
+	if x <= n.x[0] {
+		return n.y[0]
+	}
+	for i := 1; i < len(n.x); i++ {
+		if x <= n.x[i] {
+			return n.y[i-1] + (x-n.x[i-1])*(n.y[i]-n.y[i-1])/(n.x[i]-n.x[i-1])
+		}
+	}
+	return n.y[len(n.y)-1]
 }
